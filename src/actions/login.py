@@ -52,8 +52,10 @@ class LoginAction(SequentialTaskSet):
             if res.json()['code'] == 0 and res.json()['success'] is True:
                 salt = res.json()["data"]["salt"]
                 timeStr = res.json().get("data").get("time")
-                tim = str(int(datetime.strptime(timeStr, "%Y-%m-%dT%H:%M:%S.%f+08:00").timestamp() * 1000)).encode(
-                    "utf-8")
+                try:
+                    tim = str(int(datetime.strptime(timeStr, "%Y-%m-%dT%H:%M:%S.%f+08:00").timestamp() * 1000)).encode("utf-8")
+                except ValueError:
+                    tim = str(int(datetime.strptime(timeStr, "%Y-%m-%dT%H:%M:%S+08:00").timestamp() * 1000)).encode("utf-8")
                 cipher_time_text = base64.b64encode(self.cipher.encrypt(tim)).decode('utf-8')
 
                 # 获取token
@@ -72,14 +74,17 @@ class LoginAction(SequentialTaskSet):
             "value": self.value_for_token
         }
         with self.client.post(token_url, json=token_param, stream=True, name="获取token", catch_response=True) as res:
-            if res.json()["code"] == 0 and res.json()['success'] is True:
-                token = res.json()["data"]["id_token"]
-                self.header.update({"Authorization": "Bearer " + token})
-                res.success()
-                return token
+            if res.status_code == 200:
+                if res.json()["code"] == 0 and res.json()['success'] is True:
+                    token = res.json()["data"]["id_token"]
+                    self.header.update({"Authorization": "Bearer " + token})
+                    res.success()
+                    return token
+                else:
+                    res.failure('获取token失败， response: ' + res.text)
+                    return ""
             else:
-                res.failure('获取token失败， response: ' + res.text)
-                return ""
+                res.failure('获取token失败 status code: {} response: {}'.format(res.status_code, res.text))
 
 
 if __name__ == '__main__':
